@@ -1,6 +1,6 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.tools import EarlyStopping, adjust_learning_rate, adjustment
+from utils.tools import EarlyStopping, adjust_learning_rate, adjustment, event_f1, visualize_anomaly_detection
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
 import torch.multiprocessing
@@ -155,6 +155,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
         train_energy = np.array(attens_energy)
 
         # (2) find the threshold
+        x = []
         attens_energy = []
         test_labels = []
         for i, (batch_x, batch_y) in enumerate(test_loader):
@@ -166,6 +167,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
             score = score.detach().cpu().numpy()
             attens_energy.append(score)
             test_labels.append(batch_y)
+            x.append(batch_x.detach().cpu().numpy())
 
         attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
         test_energy = np.array(attens_energy)
@@ -178,9 +180,40 @@ class Exp_Anomaly_Detection(Exp_Basic):
         test_labels = np.concatenate(test_labels, axis=0).reshape(-1)
         test_labels = np.array(test_labels)
         gt = test_labels.astype(int)
+        # origin_data = np.concatenate(x, axis=0)
 
         print("pred:   ", pred.shape)
         print("gt:     ", gt.shape)
+
+        # (4) evaluation without adjustment
+        pred = np.array(pred)
+        gt = np.array(gt)
+        print("pred: ", pred.shape)
+        print("gt:   ", gt.shape)
+
+        accuracy = accuracy_score(gt, pred)
+
+        precision, recall, f_score, anomaly_events, pred_groups = event_f1(gt, pred)
+
+        info = "Anomaly Event Number: {} Predicted Group Number: {}, Precision: {:0.4f}, Recall: {:0.4f}, F-score: {:0.4f}".format(len(anomaly_events), len(pred_groups), precision, recall, f_score)
+        print(info)
+
+        f = open("result_anomaly_detection.txt", 'a')
+        f.write(setting + "  \n")
+        f.write(info)
+        f.write('\n')
+        f.write('\n')
+        f.close()
+
+        folder_path = './test_results/' + setting + '/'
+        sample_length = self.args.seq_len * 10
+        for i in range(0, len(gt) // sample_length, 200):
+            visualize_anomaly_detection(gt[i * sample_length:(i + 1) * sample_length],
+                                        pred[i * sample_length:(i + 1) * sample_length], 3,
+                                        scores=test_energy[i * sample_length:(i + 1) * sample_length],
+                                        threshold=threshold, name=folder_path + str(i * sample_length) + '.png')
+
+        visualize_anomaly_detection(gt, pred, 3, scores=test_energy, threshold=threshold, name=folder_path+'all.png')
 
         # (4) detection adjustment
         gt, pred = adjustment(gt, pred)

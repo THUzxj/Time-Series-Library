@@ -89,6 +89,15 @@ def visual(true, preds=None, name='./pic/test.pdf'):
     plt.legend()
     plt.savefig(name, bbox_inches='tight')
 
+def visual_input_prediction(input, true, preds=None, name='./pic/test.pdf'):
+    plt.figure()
+    input_len = len(input)
+    plt.plot(range(input_len), input, label='Input', linewidth=2)
+    plt.plot(range(input_len, input_len + len(true)), true, label='GroundTruth', linewidth=2)
+    if preds is not None:
+        plt.plot(range(input_len, input_len + len(preds)), preds, label='Prediction', linewidth=2)
+    plt.legend()
+    plt.savefig(name, bbox_inches='tight')
 
 def adjustment(gt, pred):
     anomaly_state = False
@@ -116,3 +125,79 @@ def adjustment(gt, pred):
 
 def cal_accuracy(y_pred, y_true):
     return np.mean(y_pred == y_true)
+
+def get_anomaly_periods(labels, max_ignore_interval):
+    changes = []
+    for i, label in enumerate(labels[:-1]):
+        if label != labels[i+1]:
+            changes.append(i+1)
+
+    for i in range(1, len(changes)):
+        if (labels[changes[i-1]] == 0 and (changes[i] - changes[i-1] <= max_ignore_interval)):
+            labels[changes[i-1]:changes[i]] = 1
+    anomaly_periods = []
+    for i, label in enumerate(labels):
+        if label == 1:
+            if len(anomaly_periods) == 0 or anomaly_periods[-1][1] != i:
+                anomaly_periods.append((i, i+1))
+            else:
+                anomaly_periods[-1] = (anomaly_periods[-1][0], i+1)
+    return anomaly_periods
+
+def get_point_labels(anomaly_periods, length):
+    pred = np.zeros(length)
+    for pred_group in anomaly_periods:
+        pred[pred_group[0]:pred_group[1]+1] = 1
+    return pred
+
+def anomaly_recall(pred_groups, anomaly_events, time_length):
+    pred_labels = get_point_labels(pred_groups, time_length)
+    event_hit = []
+    for event in anomaly_events:
+        if pred_labels[event[0]:event[1]].sum() > 0:
+            event_hit.append(1)
+        else:
+            event_hit.append(0)
+    return sum(event_hit) / len(event_hit) if len(event_hit) > 0 else 0
+            
+def anomaly_precision(pred_groups, anomaly_events, time_length):
+    event_labels = get_point_labels(anomaly_events, time_length)
+    group_hit = []
+    for group in pred_groups:
+        if event_labels[group[0]:group[1]].sum() > 0:
+            group_hit.append(1)
+        else:
+            group_hit.append(0)
+    return sum(group_hit) / len(group_hit) if len(group_hit) > 0 else 0
+
+
+def event_f1(gt, pred, check_length=3):
+    pred_groups = get_anomaly_periods(pred, check_length)
+    anomaly_events = get_anomaly_periods(gt, check_length) # TODO: add setting for max_group_length, to avoid too long group
+    new_pred_groups = []
+    for group in pred_groups:
+        new_pred_groups.append((max(0, group[0] - check_length), min(len(gt), group[1] + check_length)))
+    recall = anomaly_recall(new_pred_groups, anomaly_events, len(gt))
+    precision = anomaly_precision(new_pred_groups, anomaly_events, len(gt))
+    return precision, recall, 2 * precision * recall / (precision + recall) if precision + recall != 0 else 0, anomaly_events, pred_groups
+
+
+def visualize_anomaly_detection(gt, pred, check_length, scores = None, threshold = None, name='./pic/test.pdf'):
+    plt.figure()
+    if scores is not None:
+        plt.plot(scores, label='Anomaly Scores', linewidth=2)
+    if threshold is not None:
+        plt.axhline(y=threshold, color='r', linestyle='-')
+
+    pred_groups = get_anomaly_periods(pred, check_length)
+    anomaly_events = get_anomaly_periods(gt, check_length)
+
+    ylim = plt.ylim()
+
+    for group in pred_groups:
+        plt.fill_between(np.arange(group[0], group[1]), ylim[0], ylim[1], color='r', alpha=0.3, label='Predicted Anomaly')
+
+    for event in anomaly_events:
+        plt.fill_between(np.arange(event[0], event[1]), ylim[0], ylim[1], color='g', alpha=0.3, label='Ground Truth Anomaly')
+    plt.legend()
+    plt.savefig(name, bbox_inches='tight')
