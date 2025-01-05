@@ -126,7 +126,7 @@ def adjustment(gt, pred):
 def cal_accuracy(y_pred, y_true):
     return np.mean(y_pred == y_true)
 
-def get_anomaly_periods(labels, max_ignore_interval):
+def get_anomaly_periods(labels, max_ignore_interval, max_group_length=None):
     changes = []
     for i, label in enumerate(labels[:-1]):
         if label != labels[i+1]:
@@ -138,7 +138,7 @@ def get_anomaly_periods(labels, max_ignore_interval):
     anomaly_periods = []
     for i, label in enumerate(labels):
         if label == 1:
-            if len(anomaly_periods) == 0 or anomaly_periods[-1][1] != i:
+            if len(anomaly_periods) == 0 or anomaly_periods[-1][1] != i or (max_group_length != None and i - anomaly_periods[-1][0] > max_group_length):
                 anomaly_periods.append((i, i+1))
             else:
                 anomaly_periods[-1] = (anomaly_periods[-1][0], i+1)
@@ -172,8 +172,8 @@ def anomaly_precision(pred_groups, anomaly_events, time_length):
 
 
 def event_f1(gt, pred, check_length=3):
-    pred_groups = get_anomaly_periods(pred, check_length)
-    anomaly_events = get_anomaly_periods(gt, check_length) # TODO: add setting for max_group_length, to avoid too long group
+    pred_groups = get_anomaly_periods(pred, check_length, max_group_length=100)
+    anomaly_events = get_anomaly_periods(gt, check_length)
     new_pred_groups = []
     for group in pred_groups:
         new_pred_groups.append((max(0, group[0] - check_length), min(len(gt), group[1] + check_length)))
@@ -199,5 +199,9 @@ def visualize_anomaly_detection(gt, pred, check_length, scores = None, threshold
 
     for event in anomaly_events:
         plt.fill_between(np.arange(event[0], event[1]), ylim[0], ylim[1], color='g', alpha=0.3, label='Ground Truth Anomaly')
-    plt.legend()
+    
+    # delete duplicate labels
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
     plt.savefig(name, bbox_inches='tight')
