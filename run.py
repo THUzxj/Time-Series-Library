@@ -50,6 +50,7 @@ if __name__ == '__main__':
 
     # anomaly detection task
     parser.add_argument('--anomaly_ratio', type=float, default=0.25, help='prior anomaly ratio (%)')
+    parser.add_argument('--threshold_type', type=str, default='ratio', help='threshold type, options:[ratio, z_score]')
 
     # model define
     parser.add_argument('--expand', type=int, default=2, help='expansion factor for Mamba')

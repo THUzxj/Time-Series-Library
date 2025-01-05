@@ -205,3 +205,16 @@ def visualize_anomaly_detection(gt, pred, check_length, scores = None, threshold
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys())
     plt.savefig(name, bbox_inches='tight')
+
+def threshold_based_on_distribution(scores):
+    # outlier detection of the anomaly scores by z-score
+    scores = np.array(scores)
+    z_scores = (scores - np.mean(scores)) / np.std(scores)
+    
+    # filter the outliers
+    scores = scores[z_scores < 3]
+
+    # statistics the distribution of the anomaly scores
+    mean = np.mean(scores)
+    std = np.std(scores)
+    return mean + 3 * std

@@ -1,6 +1,6 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.tools import EarlyStopping, adjust_learning_rate, adjustment, event_f1, visualize_anomaly_detection
+from utils.tools import EarlyStopping, adjust_learning_rate, adjustment, event_f1, visualize_anomaly_detection, threshold_based_on_distribution
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
 import torch.multiprocessing
@@ -171,8 +171,11 @@ class Exp_Anomaly_Detection(Exp_Basic):
 
         attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
         test_energy = np.array(attens_energy)
-        combined_energy = np.concatenate([train_energy, test_energy], axis=0)
-        threshold = np.percentile(combined_energy, 100 - self.args.anomaly_ratio)
+        if self.args.threshold_type == 'ratio':
+            combined_energy = np.concatenate([train_energy, test_energy], axis=0)
+            threshold = np.percentile(combined_energy, 100 - self.args.anomaly_ratio)
+        elif self.args.threshold_type == 'z_score':
+            threshold = threshold_based_on_distribution(train_energy)
         print("Threshold :", threshold)
 
         # (3) evaluation on the test set
